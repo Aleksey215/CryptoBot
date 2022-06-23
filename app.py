@@ -18,11 +18,39 @@ class ConvertionException(Exception):
     pass
 
 
+class CryptoConverter:
+    @staticmethod
+    def convert(quote: str, base: str, amount: str):
+
+        if quote == base:
+            raise ConvertionException("Нужно вводить разные валюты")
+
+        try:
+            quote_ticker = keys.get(quote)
+        except KeyError:
+            raise ConvertionException(f'Не удалось обработать валюту {quote}')
+
+        try:
+            base_ticker = keys.get(base)
+        except KeyError:
+            raise ConvertionException(f'Не удалось обработать валюту {base}')
+
+        try:
+            amount = float(amount)
+        except TypeError:
+            raise ConvertionException(f"Не удалось обработать количество {amount}")
+
+        r = requests.get(f'https://min-api.cryptocompare.com/data/price?fsym={quote_ticker}&tsyms={base_ticker}')
+        total_base = json.loads(r.content)[keys.get(base)]
+
+        return total_base
+
+
 @bot.message_handler(commands=['start', 'help'])
 def help(message: telebot.types.Message):
     text = """Чтобы начать работу введите команду боту в следующем формате:
 <имя валюты> <в какую валюту перевести> <количество переводимой валюты>
-Чтобы увидить список всех доступных валют, введите: /values"""
+Чтобы увидеть список всех доступных валют, введите: /values"""
     bot.reply_to(message, text)
 
 
@@ -42,28 +70,8 @@ def convert(message: telebot.types.Message):
         raise ConvertionException("Должно быть три параметра")
 
     quote, base, amount = values
-
-    if quote == base:
-        raise ConvertionException("Нужно вводить разные валюты")
-
-    try:
-        quote_ticker = keys.get(quote)
-    except KeyError:
-        raise ConvertionException(f'Не удалось обработать валюту {quote}')
-
-    try:
-        base_ticker = keys.get(base)
-    except KeyError:
-        raise ConvertionException(f'Не удалось обработать валюту {base}')
-
-    try:
-        amount = float(amount)
-    except TypeError:
-        raise ConvertionException(f"Не удалось обработать количество {amount}")
-
-    r = requests.get(f'https://min-api.cryptocompare.com/data/price?fsym={quote_ticker}&tsyms={base_ticker}')
-    total_base = json.loads(r.content)[keys.get(base)]
-    text = f"Цена {int(amount)} {quote} в {base} - {total_base * amount}"
+    total_base = CryptoConverter.convert(quote, base, amount)
+    text = f"Цена {int(amount)} {quote} в {base} - {total_base * float(amount)}"
     bot.send_message(message.chat.id, text)
 
 
