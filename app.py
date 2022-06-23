@@ -1,49 +1,9 @@
 import telebot
-import requests
-import json
+from config import TOKEN, keys
+from utils import ConvertionException, CryptoConverter
 
-
-TOKEN = '5461192304:AAGMacF6MDL54RWVVuJhJdLmIX3_wo8Bmrc'
 
 bot = telebot.TeleBot(TOKEN)
-
-keys = {
-    'биткоин': 'BTC',
-    'эфириум': 'ETH',
-    'доллар': 'USD',
-}
-
-
-class ConvertionException(Exception):
-    pass
-
-
-class CryptoConverter:
-    @staticmethod
-    def convert(quote: str, base: str, amount: str):
-
-        if quote == base:
-            raise ConvertionException("Нужно вводить разные валюты")
-
-        try:
-            quote_ticker = keys.get(quote)
-        except KeyError:
-            raise ConvertionException(f'Не удалось обработать валюту {quote}')
-
-        try:
-            base_ticker = keys.get(base)
-        except KeyError:
-            raise ConvertionException(f'Не удалось обработать валюту {base}')
-
-        try:
-            amount = float(amount)
-        except TypeError:
-            raise ConvertionException(f"Не удалось обработать количество {amount}")
-
-        r = requests.get(f'https://min-api.cryptocompare.com/data/price?fsym={quote_ticker}&tsyms={base_ticker}')
-        total_base = json.loads(r.content)[keys.get(base)]
-
-        return total_base
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -64,15 +24,21 @@ def values(message: telebot.types.Message):
 
 @bot.message_handler(content_types=['text', ])
 def convert(message: telebot.types.Message):
-    values = message.text.split(' ')
+    try:
+        values = message.text.split(' ')
 
-    if len(values) != 3:
-        raise ConvertionException("Должно быть три параметра")
+        if len(values) != 3:
+            raise ConvertionException("Должно быть три параметра")
 
-    quote, base, amount = values
-    total_base = CryptoConverter.convert(quote, base, amount)
-    text = f"Цена {int(amount)} {quote} в {base} - {total_base * float(amount)}"
-    bot.send_message(message.chat.id, text)
+        quote, base, amount = values
+        total_base = CryptoConverter.convert(quote, base, amount)
+    except ConvertionException as e:
+        bot.reply_to(message, f"Ошибка пользователя.\n{e}")
+    except Exception as e:
+        bot.reply_to(message, f"Не удалось обработать команду\n{e}")
+    else:
+        text = f"Цена {int(amount)} {quote} в {base} - {total_base * float(amount)}"
+        bot.send_message(message.chat.id, text)
 
 
 bot.polling(none_stop=True)
